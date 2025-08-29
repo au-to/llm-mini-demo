@@ -1,17 +1,33 @@
 <template>
-  <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col h-full">
+  <div 
+    class="bg-gray-900 border-r border-gray-800 flex flex-col h-full transition-transform duration-300 ease-in-out z-50"
+    :class="[
+      isMobile ? 'fixed top-0 left-0 w-80' : 'w-64',
+      isMobile && !isOpen ? '-translate-x-full' : 'translate-x-0'
+    ]"
+  >
     <!-- Logo 区域 -->
     <div class="p-6 border-b border-gray-800">
-      <div class="flex items-center space-x-3">
-        <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <img src="@/assets/logo.png" alt="pharmolix" class="w-8 h-8">
+          </div>
+          <div>
+            <h1 class="text-white font-semibold">pharmolix</h1>
+          </div>
+        </div>
+        
+        <!-- 移动端关闭按钮 -->
+        <button 
+          v-if="isMobile" 
+          @click="$emit('close')"
+          class="toolbar-btn lg:hidden"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
           </svg>
-        </div>
-        <div>
-          <h1 class="text-white font-semibold">扣子空间</h1>
-          <p class="text-xs text-gray-400">BETA</p>
-        </div>
+        </button>
       </div>
       
       <button class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center justify-center space-x-2">
@@ -61,11 +77,17 @@
           <span class="text-gray-300 font-medium">任务</span>
         </div>
         
-        <div class="sidebar-item" :class="{ active: currentView === 'current' }" @click="currentView = 'current'">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-          </svg>
-          <span>项目总结工作</span>
+        <div class="space-y-2">
+          <div 
+            v-for="task in availableTasks" 
+            :key="task.id"
+            class="sidebar-item" 
+            :class="{ active: selectedTask === task.id }"
+            @click="selectTask(task.id)"
+          >
+            <component :is="task.icon" class="w-5 h-5" />
+            <span>{{ task.name }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -74,10 +96,10 @@
     <div class="p-4 border-t border-gray-800">
       <div class="flex items-center space-x-3">
         <div class="w-8 h-8 bg-gradient-to-r from-pink-500 to-red-500 rounded-full flex items-center justify-center">
-          <span class="text-white text-sm font-medium">U</span>
+          <span class="text-white text-sm font-medium">Z</span>
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-white truncate">RootUser_2110368801</p>
+          <p class="text-sm font-medium text-white truncate">zhaohubiao</p>
         </div>
       </div>
     </div>
@@ -85,10 +107,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, h } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useSlidesStore } from '@/stores/slides'
+
+// Props
+interface Props {
+  isOpen: boolean
+  isMobile: boolean
+}
+
+defineProps<Props>()
+
+// Emits
+defineEmits<{
+  toggle: []
+  close: []
+}>()
+
+const slidesStore = useSlidesStore()
+const { selectedTask } = storeToRefs(slidesStore)
 
 const currentExpert = ref('ppt')
-const currentView = ref('current')
 
 const aiExperts = [
   {
@@ -121,7 +161,43 @@ const aiExperts = [
   }
 ]
 
+// 可用任务列表
+const availableTasks = [
+  {
+    id: 'ppt-creation',
+    name: 'PPT 制作',
+    icon: h('svg', { class: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+      h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' })
+    ])
+  },
+  {
+    id: 'document-analysis',
+    name: '文档分析',
+    icon: h('svg', { class: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+      h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M9 12h6m-6 4h6m-7 5a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2H5z' })
+    ])
+  },
+  {
+    id: 'data-visualization',
+    name: '数据可视化',
+    icon: h('svg', { class: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+      h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' })
+    ])
+  },
+  {
+    id: 'content-writing',
+    name: '内容写作',
+    icon: h('svg', { class: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+      h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z' })
+    ])
+  }
+]
+
 const selectExpert = (expertId: string) => {
   currentExpert.value = expertId
+}
+
+const selectTask = (taskId: string) => {
+  slidesStore.selectTask(taskId)
 }
 </script>

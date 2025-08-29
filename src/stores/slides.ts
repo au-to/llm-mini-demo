@@ -11,6 +11,10 @@ export const useSlidesStore = defineStore('slides', () => {
   })
   const chatMessages = ref<ChatMessage[]>([])
   const isGenerating = ref(false)
+  const layoutMode = ref<'chat-only' | 'split-view'>('chat-only') // 布局模式：仅聊天 | 分栏视图
+  const selectedTask = ref<string | null>(null) // 当前选中的任务
+  const error = ref<string | null>(null) // 错误状态
+  const isLoading = ref(false) // 加载状态
 
   // 计算属性
   const currentSlideIndex = ref(0)
@@ -30,6 +34,19 @@ export const useSlidesStore = defineStore('slides', () => {
       jsonData
     }
     chatMessages.value.push(message)
+  }
+
+  // 设置错误状态
+  const setError = (errorMessage: string) => {
+    error.value = errorMessage
+    setTimeout(() => {
+      error.value = null
+    }, 5000) // 5秒后自动清除错误
+  }
+
+  // 清除错误
+  const clearError = () => {
+    error.value = null
   }
 
   // 执行幻灯片操作
@@ -303,28 +320,55 @@ export const useSlidesStore = defineStore('slides', () => {
 
   // 处理用户输入
   const handleUserInput = async (input: string) => {
-    if (!input.trim()) return
+    if (!input.trim()) {
+      setError('请输入有效的内容')
+      return
+    }
 
+    // 清除之前的错误
+    clearError()
+    
     // 添加用户消息
     addChatMessage('user', input)
     isGenerating.value = true
+    isLoading.value = true
 
     try {
       // 模拟AI处理
       const action = await simulateAIResponse(input)
       
+      // 如果是添加幻灯片操作且当前是仅聊天模式，自动切换到分栏模式
+      if (action.action === 'add_slide' && layoutMode.value === 'chat-only') {
+        switchToSplitView('ppt-creation')
+      }
+      
       // 执行操作
       executeSlideAction(action)
       
       // 添加AI响应消息
-      const aiResponse = `已执行操作：${action.action}`
+      const aiResponse = generateResponseMessage(action)
       addChatMessage('ai', aiResponse, action)
       
-    } catch (error) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '处理请求时出现未知错误'
+      setError(errorMessage)
       addChatMessage('ai', '抱歉，处理您的请求时出现了错误，请重试。')
     } finally {
       isGenerating.value = false
+      isLoading.value = false
     }
+  }
+
+  // 生成响应消息
+  const generateResponseMessage = (action: SlideAction): string => {
+    const messages: Record<string, string> = {
+      'add_slide': '已为您创建新的幻灯片',
+      'edit_text': '已更新幻灯片内容',
+      'replace_image': '已更换幻灯片图片',
+      'set_theme': '已应用新的主题样式',
+      'delete_slide': '已删除指定幻灯片'
+    }
+    return messages[action.action] || '操作已完成'
   }
 
   // 导航方法
@@ -346,17 +390,97 @@ export const useSlidesStore = defineStore('slides', () => {
     }
   }
 
+  // 切换布局模式
+  const switchToSplitView = (taskId?: string) => {
+    layoutMode.value = 'split-view'
+    if (taskId) {
+      selectedTask.value = taskId
+    }
+  }
+
+  const switchToChatOnly = () => {
+    layoutMode.value = 'chat-only'
+    selectedTask.value = null
+  }
+
+  // 选择任务（会自动切换到分栏模式）
+  const selectTask = (taskId: string) => {
+    selectedTask.value = taskId
+    layoutMode.value = 'split-view'
+    
+    // 根据任务类型添加相应的欢迎消息
+    const taskMessages: Record<string, string> = {
+      'ppt-creation': '已切换到PPT制作模式，现在您可以在左侧与我对话创建幻灯片，右侧实时预览效果。',
+      'document-analysis': '已切换到文档分析模式，请上传您需要分析的文档。',
+      'data-visualization': '已切换到数据可视化模式，请提供您的数据或描述可视化需求。'
+    }
+    
+    const message = taskMessages[taskId] || '已切换到分栏模式，您可以开始工作了。'
+    addChatMessage('ai', message)
+  }
+
+  // 保存状态到本地存储
+  const saveToLocalStorage = () => {
+    try {
+      const state = {
+        slides: slides.value,
+        theme: theme.value,
+        chatMessages: chatMessages.value,
+        layoutMode: layoutMode.value,
+        selectedTask: selectedTask.value,
+        currentSlideIndex: currentSlideIndex.value,
+        timestamp: Date.now()
+      }
+      localStorage.setItem('pharmolix_state', JSON.stringify(state))
+    } catch (error) {
+      console.warn('无法保存状态到本地存储:', error)
+    }
+  }
+
+  // 从本地存储恢复状态
+  const loadFromLocalStorage = () => {
+    try {
+      const saved = localStorage.getItem('pharmolix_state')
+      if (saved) {
+        const state = JSON.parse(saved)
+        // 检查数据是否过期（24小时）
+        if (Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
+          slides.value = state.slides || []
+          theme.value = state.theme || { palette: 'blue', font: 'inter' }
+          chatMessages.value = state.chatMessages || []
+          layoutMode.value = state.layoutMode || 'chat-only'
+          selectedTask.value = state.selectedTask || null
+          currentSlideIndex.value = state.currentSlideIndex || 0
+          return true
+        }
+      }
+    } catch (error) {
+      console.warn('无法从本地存储恢复状态:', error)
+    }
+    return false
+  }
+
+  // 清除本地存储
+  const clearLocalStorage = () => {
+    try {
+      localStorage.removeItem('pharmolix_state')
+    } catch (error) {
+      console.warn('无法清除本地存储:', error)
+    }
+  }
+
   // 初始化示例数据
   const initializeDemo = () => {
-    const demoSlide: Slide = {
-      id: generateId(),
-      layout: 'title',
-      title: '项目核心价值与成果概述',
-      content: '基于数据驱动的创新解决方案'
-    }
-    slides.value = [demoSlide]
+    // 尝试从本地存储恢复状态
+    const restored = loadFromLocalStorage()
     
-    addChatMessage('ai', '您好！我是PPT制作专家，专门帮助您创建专业的演示文稿。我已经为您准备了一个项目总结报告的模板，您可以告诉我具体的内容需求，我会帮您完善幻灯片。')
+    if (!restored) {
+      // 初始化时不创建任何幻灯片，保持纯聊天模式
+      slides.value = []
+      chatMessages.value = []
+      
+      addChatMessage('ai', '您好！我是您的AI办公助手。我可以帮助您创建PPT、分析文档、制作图表等。请告诉我您需要什么帮助，或者从左侧选择一个具体任务开始。')
+    }
   }
 
   return {
@@ -366,6 +490,10 @@ export const useSlidesStore = defineStore('slides', () => {
     chatMessages,
     isGenerating,
     currentSlideIndex,
+    layoutMode,
+    selectedTask,
+    error,
+    isLoading,
     
     // 计算属性
     currentSlide,
@@ -377,6 +505,14 @@ export const useSlidesStore = defineStore('slides', () => {
     nextSlide,
     prevSlide,
     initializeDemo,
-    executeSlideAction
+    executeSlideAction,
+    switchToSplitView,
+    switchToChatOnly,
+    selectTask,
+    saveToLocalStorage,
+    loadFromLocalStorage,
+    clearLocalStorage,
+    setError,
+    clearError
   }
 })
